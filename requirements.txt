@@ -1,6 +1,0 @@
-opencv-python
-numpy
-flask
-requests
-tflite-runtime
-picamera2
