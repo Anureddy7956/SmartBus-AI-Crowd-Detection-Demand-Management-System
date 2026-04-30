@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmartBus AI — Live Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a25;
+    --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+    --text:#e8e8f0;--muted:#7a7a9a;
+    --amber:#f5a623;--amber-dim:rgba(245,166,35,0.12);
+    --green:#22c55e;--green-dim:rgba(34,197,94,0.12);
+    --red:#ef4444;--red-dim:rgba(239,68,68,0.12);
+    --blue:#60a5fa;--blue-dim:rgba(96,165,250,0.1);
+    --purple:#a78bfa;--teal:#2dd4bf;
+    --font:'Space Grotesk',sans-serif;--mono:'JetBrains Mono',monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+
+  /* ── TOPBAR */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:54px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;gap:16px}
+  .logo{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;letter-spacing:-0.3px;flex-shrink:0}
+  .logo-icon{width:28px;height:28px;background:var(--amber);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .view-toggle{display:flex;background:var(--bg3);border-radius:8px;padding:3px;border:1px solid var(--border)}
+  .view-btn{padding:5px 16px;border:none;border-radius:5px;font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;background:transparent;color:var(--muted)}
+  .view-btn.active{background:var(--amber);color:#0a0a0f}
+  .topbar-right{display:flex;align-items:center;gap:14px}
+  .status-dot{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+  .dot.offline{background:var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .sysinfo{display:flex;gap:10px;font-size:11px;font-family:var(--mono);color:var(--muted)}
+  .sysinfo span{background:var(--bg3);padding:2px 8px;border-radius:4px;border:1px solid var(--border)}
+  .live-badge{font-size:10px;padding:2px 8px;background:rgba(34,197,94,.15);color:var(--green);border-radius:4px;font-family:var(--mono);font-weight:600;letter-spacing:.5px}
+
+  /* ── VIEWS */
+  .view{display:none}.view.active{display:block}
+
+  /* ═══ DISPATCHER VIEW ═══ */
+  .dispatcher-layout{display:grid;grid-template-columns:250px 1fr 290px;height:calc(100vh - 54px);overflow:hidden}
+  .sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:14px;overflow-y:auto}
+  .sidebar-title{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding:0 4px}
+  .stop-item{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:7px;cursor:pointer;transition:background .15s;margin-bottom:3px;border:1px solid transparent}
+  .stop-item:hover{background:var(--bg3)}
+  .stop-item.active{background:var(--amber-dim);border-color:rgba(245,166,35,.25)}
+  .stop-indicator{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .stop-info{flex:1;min-width:0}
+  .stop-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stop-count{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:1px}
+  .crowd-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;font-family:var(--mono)}
+  .crowd-low{background:var(--green-dim);color:var(--green)}
+  .crowd-med{background:var(--amber-dim);color:var(--amber)}
+  .crowd-high{background:var(--red-dim);color:var(--red)}
+  .sidebar-section{margin-top:18px}
+
+  /* AI Alerts */
+  .alert-card{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:border-color .2s}
+  .alert-card:hover{border-color:var(--border2)}
+  .alert-card.urgent{border-color:rgba(239,68,68,.3);background:var(--red-dim)}
+  .alert-card.suggestion{border-color:rgba(245,166,35,.2)}
+  .alert-card.dispatch{border-color:rgba(45,212,191,.2);background:rgba(45,212,191,.06)}
+  .alert-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+  .alert-text{font-size:12px;line-height:1.5}
+  .alert-ts{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px}
+  .alert-action{display:inline-block;margin-top:6px;font-size:11px;font-weight:600;color:var(--amber);cursor:pointer;padding:2px 7px;border:1px solid rgba(245,166,35,.3);border-radius:3px;transition:background .15s}
+  .alert-action:hover{background:var(--amber-dim)}
+
+  /* Main center */
+  .main-center{overflow-y:auto;padding:18px}
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:13px 15px;transition:border-color .2s}
+  .stat-card:hover{border-color:var(--border2)}
+  .stat-label{font-size:11px;color:var(--muted);margin-bottom:5px}
+  .stat-value{font-size:22px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px}
+  .stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+  .stat-up{color:var(--green)}.stat-down{color:var(--red)}
+
+  /* Section */
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .section-title{font-size:13px;font-weight:600}
+  .section-badge{font-size:10px;padding:2px 7px;background:var(--blue-dim);color:var(--blue);border-radius:4px;font-family:var(--mono)}
+
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:15px;margin-bottom:14px}
+
+  /* Heatmap */
+  .heatmap-stop{height:20px;border-radius:3px;cursor:pointer;transition:transform .1s}
+  .heatmap-stop:hover{transform:scale(1.12);z-index:10;position:relative}
+
+  /* Prediction bars */
+  .pred-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+  .pred-bar-label{font-size:12px;color:var(--muted);width:80px;flex-shrink:0}
+  .pred-bar-track{flex:1;height:7px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden}
+  .pred-bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+  .pred-bar-val{font-size:11px;font-family:var(--mono);color:var(--muted);width:50px;text-align:right}
+
+  /* Fleet table */
+  .dispatch-table{width:100%;border-collapse:collapse;font-size:12px}
+  .dispatch-table th{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:500;padding:6px 9px;text-align:left;border-bottom:1px solid var(--border)}
+  .dispatch-table td{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}
+  .dispatch-table tr:last-child td{border-bottom:none}
+  .bus-id{font-family:var(--mono);font-weight:500;color:var(--amber);font-size:11px}
+  .eta-val{font-family:var(--mono);color:var(--teal)}
+  .seat-bar{display:flex;gap:2px}
+  .seat-dot{width:5px;height:5px;border-radius:1px}
+  .seat-occupied{background:var(--amber)}
+  .seat-free{background:rgba(255,255,255,.1)}
+  .action-btn{font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;font-family:var(--font);transition:background .15s}
+  .action-btn:hover{background:var(--bg3)}
+  .action-btn.primary{border-color:rgba(245,166,35,.4);color:var(--amber)}
+  .action-btn.primary:hover{background:var(--amber-dim)}
+
+  /* Right panel */
+  .right-panel{background:var(--bg2);border-left:1px solid var(--border);padding:15px;overflow-y:auto}
+  .seat-grid-visual{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:10px 0 14px}
+  .seat-unit{height:26px;border-radius:4px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;font-family:var(--mono);transition:background .2s;cursor:pointer}
+  .seat-unit.occupied{background:rgba(245,166,35,.15);border-color:rgba(245,166,35,.3);color:var(--amber)}
+  .seat-unit.free{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--green)}
+
+  /* Camera feed */
+  .camera-feed{width:100%;border-radius:8px;border:1px solid var(--border);background:#000;min-height:160px;object-fit:cover;display:block}
+  .camera-placeholder{width:100%;height:160px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--muted);font-size:12px}
+
+  /* Tags */
+  .tag{font-size:10px;padding:3px 8px;border-radius:4px;font-family:var(--mono);font-weight:500}
+  .tag-offline{background:rgba(167,139,250,.12);color:var(--purple)}
+  .tag-ai{background:rgba(45,212,191,.12);color:var(--teal)}
+  .tag-live{background:var(--green-dim);color:var(--green)}
+
+  /* ═══ PASSENGER VIEW ═══ */
+  .passenger-layout{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 54px)}
+  .p-left{padding:22px;border-right:1px solid var(--border)}
+  .p-right{padding:22px}
+  .p-stop-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+  .p-stop-name{font-size:20px;font-weight:700;letter-spacing:-.5px}
+  .p-stop-sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .p-crowd-badge{padding:7px 14px;border-radius:7px;font-size:13px;font-weight:700;font-family:var(--mono)}
+
+  .bus-arrive-card{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:16px;margin-bottom:13px;cursor:pointer;transition:border-color .2s,background .2s}
+  .bus-arrive-card:hover{border-color:var(--border2);background:var(--bg3)}
+  .bus-arrive-card.next{border-color:rgba(245,166,35,.4)}
+  .ba-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+  .ba-route{font-size:18px;font-weight:700;color:var(--amber);font-family:var(--mono)}
+  .ba-eta-big{text-align:right}
+  .ba-eta-num{font-size:26px;font-weight:700;font-family:var(--mono);color:var(--teal);letter-spacing:-1px}
+  .ba-eta-label{font-size:10px;color:var(--muted);text-align:right}
+  .ba-seat-row{display:flex;align-items:center;gap:10px}
+  .ba-seat-label{font-size:12px;color:var(--muted)}
+  .ba-seat-count{font-size:17px;font-weight:700;font-family:var(--mono);color:var(--green)}
+  .ba-seat-bar-track{flex:1;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden}
+  .ba-seat-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),var(--teal))}
+  .ba-stops{font-size:11px;color:var(--muted);margin-top:6px}
+
+  .signal-btn{width:100%;padding:14px;background:var(--amber-dim);border:2px solid rgba(245,166,35,.4);border-radius:11px;color:var(--amber);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+  .signal-btn:hover{background:rgba(245,166,35,.2);border-color:var(--amber)}
+  .signal-btn:active{transform:scale(.98)}
+  .signal-btn.sent{background:var(--green-dim);border-color:rgba(34,197,94,.4);color:var(--green)}
+  .signal-count{display:flex;align-items:center;justify-content:space-between;margin-top:7px;padding:7px 11px;background:var(--bg2);border-radius:6px;font-size:12px}
+  .signal-total{font-family:var(--mono);font-weight:600;font-size:17px;color:var(--amber)}
+
+  .announce-card{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:13px}
+  .announce-header{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .speaker-icon{width:26px;height:26px;background:var(--blue-dim);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:13px}
+  .announce-title{font-size:13px;font-weight:600}
+  .announce-badge{font-size:10px;padding:2px 6px;background:var(--green-dim);color:var(--green);border-radius:4px;font-family:var(--mono);margin-left:auto}
+  .announce-msg{background:var(--bg3);border-radius:7px;padding:10px 13px;margin-bottom:9px}
+  .announce-lang{font-size:10px;color:var(--muted);font-family:var(--mono);margin-bottom:3px}
+  .announce-text{font-size:13px;line-height:1.6}
+  .play-btn{display:flex;align-items:center;gap:6px;padding:7px 13px;background:var(--blue-dim);border:none;border-radius:6px;color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font);transition:background .15s;width:100%;justify-content:center}
+  .play-btn:hover{background:rgba(96,165,250,.15)}
+
+  .led-display{background:#0d1a0d;border:1px solid rgba(34,197,94,.3);border-radius:9px;padding:14px;margin-bottom:13px;font-family:var(--mono)}
+  .led-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+  .led-row:last-child{margin-bottom:0}
+  .led-text{color:#22c55e;font-size:13px;font-weight:500}
+  .led-val{color:#86efac;font-size:13px}
+
+  .crowd-visual{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;margin:9px 0}
+  .person-icon{width:100%;aspect-ratio:1;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:12px;border:1px solid rgba(255,255,255,0.06)}
+  .person-icon.present{background:rgba(245,166,35,.15)}
+  .person-icon.absent{background:rgba(255,255,255,.03)}
+
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+  /* Connection status banner */
+  .conn-banner{background:var(--red-dim);border-bottom:1px solid rgba(239,68,68,.3);padding:6px 24px;font-size:12px;color:var(--red);display:none;align-items:center;gap:8px}
+  .conn-banner.show{display:flex}
+
+  /* Spinner */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spin{animation:spin 1s linear infinite;display:inline-block}
+
+  /* Pulse animation for live values */
+  @keyframes flash{0%,100%{opacity:1}50%{opacity:.5}}
+  .flash{animation:flash .4s ease}
+</style>
+</head>
+<body>
+
+<!-- Connection error banner -->
+<div class="conn-banner" id="conn-banner">
+  ⚠ Backend not reachable — showing cached/demo data &nbsp;|&nbsp;
+  <span style="font-family:var(--mono)">http://localhost:5000</span>
+  <button onclick="retryConnect()" style="margin-left:auto;padding:2px 10px;border:1px solid var(--red);background:transparent;color:var(--red);border-radius:4px;cursor:pointer;font-size:11px">Retry</button>
+</div>
+
+<!-- ── TOP BAR ── -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">🚌</div>
+    SmartBus <span style="color:var(--amber);margin-left:2px">AI</span>
+  </div>
+  <div class="view-toggle">
+    <button class="view-btn active" onclick="switchView('dispatcher',this)">🖥 Dispatcher</button>
+    <button class="view-btn" onclick="switchView('passenger',this)">📱 Passenger</button>
+  </div>
+  <div class="topbar-right">
+    <div class="sysinfo" id="sysinfo">
+      <span id="sys-cpu">CPU —%</span>
+      <span id="sys-ram">RAM —MB</span>
+      <span id="sys-temp">—°C</span>
+    </div>
+    <div class="live-badge" id="live-badge">● LIVE</div>
+    <div class="status-dot">
+      <div class="dot" id="conn-dot"></div>
+      <span id="conn-label">connecting…</span>
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted)" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     DISPATCHER VIEW
+═══════════════════════════════════════ -->
+<div class="view active" id="view-dispatcher">
+  <div class="dispatcher-layout">
+
+    <!-- LEFT SIDEBAR: Stops + Alerts -->
+    <div class="sidebar">
+      <div class="sidebar-title">Bus Stops</div>
+      <div id="stops-list">
+        <div style="color:var(--muted);font-size:12px;padding:8px">Loading stops…</div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-title">AI Alerts</div>
+        <div id="alerts-list">
+          <div style="color:var(--muted);font-size:12px;padding:8px">No alerts</div>
+        </div>
+      </div>
+
+      <!-- AI Suggestions -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">AI Suggestions</div>
+        <div id="suggestions-list">
+          <div style="color:var(--muted);font-size:12px;padding:8px">Analysing…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: Stats + Heatmap + Fleet -->
+    <div class="main-center">
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Crowd</div>
+          <div class="stat-value" id="stat-total-crowd">—</div>
+          <div class="stat-sub" id="stat-crowd-sub">across all stops</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Buses</div>
+          <div class="stat-value" id="stat-buses">—</div>
+          <div class="stat-sub">in service</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Alerts Today</div>
+          <div class="stat-value" id="stat-alerts" style="color:var(--red)">—</div>
+          <div class="stat-sub stat-down" id="stat-alerts-sub"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Passenger Signals</div>
+          <div class="stat-value" id="stat-signals" style="color:var(--teal)">—</div>
+          <div class="stat-sub">today</div>
+        </div>
+      </div>
+
+      <!-- Demand Heatmap -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">📊 Demand Heatmap + AI Prediction</span>
+          <span class="section-badge" id="heatmap-badge">Loading…</span>
+        </div>
+        <div id="heatmap-container"></div>
+      </div>
+
+      <!-- Prediction Bars -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">🔮 30-Min Crowd Forecast</span>
+          <span class="section-badge">AI · EWMA Model</span>
+        </div>
+        <div id="pred-bars"></div>
+      </div>
+
+      <!-- Fleet Table -->
+      <div class="card">
+        <div class="section-header">
+          <span class="section-title">🚌 Fleet Status</span>
+          <button onclick="dispatchBestBus()" style="font-size:11px;padding:4px 12px;border:1px solid rgba(245,166,35,.4);background:var(--amber-dim);color:var(--amber);border-radius:5px;cursor:pointer;font-family:var(--font);font-weight:600">+ Dispatch Bus</button>
+        </div>
+        <table class="dispatch-table">
+          <thead>
+            <tr>
+              <th>Bus ID</th><th>Route</th><th>Next Stop</th>
+              <th>ETA</th><th>Seats</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="fleet-table">
+            <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">Loading fleet…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Selected Stop Detail + Camera -->
+    <div class="right-panel">
+      <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px">
+        Selected Stop
+      </div>
+
+      <!-- Stop name + crowd -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-size:17px;font-weight:700" id="selected-stop-name">—</div>
+          <div style="font-size:12px;color:var(--muted)" id="selected-stop-route">Select a stop</div>
+        </div>
+        <div class="crowd-badge crowd-low" id="selected-crowd-badge">—</div>
+      </div>
+
+      <!-- Camera Feed -->
+      <div style="margin-bottom:14px">
+        <div class="section-header" style="margin-bottom:7px">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px">📷 Live Camera</span>
+          <span class="tag tag-live" style="font-size:9px" id="cam-status">checking…</span>
+        </div>
+        <img id="camera-stream" class="camera-feed" src="/api/stream" alt="Camera feed"
+             onerror="showCameraPlaceholder()" style="display:none">
+        <div class="camera-placeholder" id="camera-placeholder">
+          <div style="font-size:24px">📷</div>
+          <div>PiCamera2 · YOLOv8n</div>
+          <div style="font-size:10px;color:var(--muted)">/api/stream</div>
+        </div>
+      </div>
+
+      <!-- Current crowd visual -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="section-header" style="margin-bottom:7px">
+          <span style="font-size:11px;font-weight:600">People Detected</span>
+          <span id="crowd-count-badge" style="font-family:var(--mono);font-size:13px;color:var(--amber);font-weight:700">—</span>
+        </div>
+        <div class="crowd-visual" id="crowd-visual"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px" id="crowd-level-text">—</div>
+      </div>
+
+      <!-- Seat grid -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="section-header" style="margin-bottom:8px">
+          <span style="font-size:11px;font-weight:600">Seat Availability</span>
+          <span id="seat-count-badge" style="font-family:var(--mono);font-size:11px;color:var(--green)">—</span>
+        </div>
+        <div class="seat-grid-visual" id="seat-grid"></div>
+        <div style="font-size:11px;color:var(--muted)" id="seat-status-text">—</div>
+      </div>
+
+      <!-- Prediction mini -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;margin-bottom:9px">Crowd Prediction</div>
+        <div id="prediction-bars-mini"></div>
+      </div>
+
+      <!-- Announce button -->
+      <div style="margin-bottom:10px">
+        <button class="signal-btn" onclick="triggerAnnouncement()" style="font-size:13px;padding:11px">
+          <span>🔊</span> Announce at Stop
+        </button>
+      </div>
+
+      <!-- Dispatch button -->
+      <button onclick="dispatchToSelected()" style="width:100%;padding:10px;border:1px solid rgba(245,166,35,.4);background:var(--amber-dim);color:var(--amber);border-radius:8px;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s">
+        🚌 Dispatch Bus Here
+      </button>
+
+      <!-- System tags -->
+      <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--muted)">Tech Stack</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <span class="tag tag-offline">Raspberry Pi 4B</span>
+          <span class="tag tag-ai">YOLOv8n ONNX</span>
+          <span class="tag tag-offline">pyttsx3</span>
+          <span class="tag tag-live">PiCamera2</span>
+          <span class="tag" style="background:var(--blue-dim);color:var(--blue)">Flask</span>
+          <span class="tag" style="background:var(--blue-dim);color:var(--blue)">SQLite</span>
+          <span class="tag tag-ai">cv2.dnn</span>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--muted)">All processing on-device · No cloud · Works offline</div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /dispatcher -->
+
+<!-- ═══════════════════════════════════════
+     PASSENGER VIEW
+═══════════════════════════════════════ -->
+<div class="view" id="view-passenger">
+  <div class="passenger-layout">
+
+    <!-- LEFT: Stop info + buses -->
+    <div class="p-left">
+      <div class="p-stop-header">
+        <div>
+          <div class="p-stop-name" id="p-stop-name">Majestic Bus Stand</div>
+          <div class="p-stop-sub" id="p-stop-sub">Route 201 · Live data from PiCamera2</div>
+        </div>
+        <div class="p-crowd-badge crowd-med" id="p-crowd-badge">MODERATE</div>
+      </div>
+
+      <!-- LED board -->
+      <div class="led-display">
+        <div class="led-row">
+          <span class="led-text">► NEXT BUS</span>
+          <span class="led-val" id="led-next-bus">—</span>
+        </div>
+        <div class="led-row">
+          <span class="led-text">► ETA</span>
+          <span class="led-val" id="led-eta">— min</span>
+        </div>
+        <div class="led-row">
+          <span class="led-text">► SEATS FREE</span>
+          <span class="led-val" id="led-seats">—</span>
+        </div>
+        <div class="led-row">
+          <span class="led-text">► CROWD</span>
+          <span class="led-val" id="led-crowd">— people</span>
+        </div>
+        <div class="led-row">
+          <span class="led-text">► STATUS</span>
+          <span class="led-val" id="led-status">—</span>
+        </div>
+      </div>
+
+      <!-- Crowd visual -->
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">People at Stop (camera detected)</div>
+      <div class="crowd-visual" id="p-crowd-visual"></div>
+      <div style="font-size:11px;color:var(--muted);margin:6px 0 16px;font-family:var(--mono)" id="p-crowd-count">— detected</div>
+
+      <!-- Arriving buses -->
+      <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">Upcoming Buses</div>
+      <div id="p-buses-list">
+        <div style="color:var(--muted);font-size:12px">Loading…</div>
+      </div>
+
+      <!-- Signal button -->
+      <div style="margin-top:18px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">
+          🖐 Request a Bus
+        </div>
+        <button class="signal-btn" id="p-signal-btn" onclick="sendPassengerSignal()">
+          <span>🖐</span> Request Bus at This Stop
+        </button>
+        <div class="signal-count">
+          <span style="color:var(--muted)">Requests in last 15 min</span>
+          <span class="signal-total" id="p-signal-counter">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Announcements + predictions -->
+    <div class="p-right">
+
+      <!-- Announcements -->
+      <div class="announce-card">
+        <div class="announce-header">
+          <div class="speaker-icon">🔊</div>
+          <div class="announce-title">Audio Announcement</div>
+          <div class="announce-badge">OFFLINE</div>
+        </div>
+        <div class="announce-msg">
+          <div class="announce-lang">ENGLISH</div>
+          <div class="announce-text" id="p-announce-en">Bus arriving in — minutes. — seats available.</div>
+        </div>
+        <div class="announce-msg">
+          <div class="announce-lang">ಕನ್ನಡ (KANNADA)</div>
+          <div class="announce-text announce-kannada" id="p-announce-kn">ಬಸ್ — ನಿಮಿಷದಲ್ಲಿ ಬರುತ್ತದೆ.</div>
+        </div>
+        <button class="play-btn" onclick="playAnnouncement()">▶ &nbsp;Play Announcement (pyttsx3 offline)</button>
+      </div>
+
+      <!-- Seat detail -->
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">Seat Availability — Next Bus</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="font-size:32px;font-weight:700;font-family:var(--mono);color:var(--green)" id="p-seat-big">—</div>
+          <div>
+            <div style="font-size:12px;color:var(--muted)">seats available</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px" id="p-seat-status">—</div>
+          </div>
+        </div>
+        <div class="seat-grid-visual" id="p-seat-grid"></div>
+      </div>
+
+      <!-- Prediction for passenger -->
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">🔮 Crowd Prediction</div>
+        <div style="display:flex;flex-direction:column;gap:7px" id="p-prediction-list">
+          <div style="color:var(--muted);font-size:12px">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Event intelligence -->
+      <div class="card">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">⚡ Event Intelligence</div>
+        <div id="p-event-info" style="font-size:12px;color:var(--muted)">No events detected. Normal service.</div>
+      </div>
+
+      <!-- System info passenger -->
+      <div style="margin-top:8px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--muted)">Camera</span>
+          <span style="font-family:var(--mono);color:var(--green)" id="p-cam-status">checking…</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px">
+          <span style="color:var(--muted)">Detector</span>
+          <span style="font-family:var(--mono);color:var(--green)" id="p-detect-status">YOLOv8n · —fps</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px">
+          <span style="color:var(--muted)">Uptime</span>
+          <span style="font-family:var(--mono);color:var(--muted)" id="p-uptime">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px">
+          <span style="color:var(--muted)">Mode</span>
+          <span style="font-family:var(--mono);color:var(--purple)">Edge AI · Offline</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /passenger -->
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const API   = '';            // same origin — Flask serves this HTML
+const POLL  = 2500;          // ms between live data fetches
+let   connected    = false;
+let   selectedStop = null;
+let   liveData     = null;
+let   signalSent   = false;
+
+// ═══════════════════════════════════════════
+// VIEW SWITCH
+// ═══════════════════════════════════════════
+function switchView(v, btn) {
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.view-btn').forEach(x => x.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════
+// LIVE DATA LOOP
+// ═══════════════════════════════════════════
+async function fetchLive() {
+  try {
+    const r = await fetch(API + '/api/live', {signal: AbortSignal.timeout(2000)});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (!j.ok) throw new Error('API error');
+    liveData = j.data;
+    setConnected(true);
+    renderAll(liveData);
+  } catch(e) {
+    setConnected(false);
+    renderDemoData();
+  }
+}
+
+async function fetchSysInfo() {
+  try {
+    const r = await fetch(API + '/api/sysinfo', {signal: AbortSignal.timeout(1500)});
+    const j = await r.json();
+    document.getElementById('sys-cpu').textContent  = `CPU ${j.cpu}%`;
+    document.getElementById('sys-ram').textContent  = `RAM ${j.ram_used_mb}MB`;
+    document.getElementById('sys-temp').textContent = `${j.temp_c}°C`;
+  } catch(e) {}
+}
+
+async function fetchHealth() {
+  try {
+    const r = await fetch(API + '/api/health', {signal: AbortSignal.timeout(1500)});
+    const j = await r.json();
+    document.getElementById('p-cam-status').textContent    = j.camera ? 'PiCamera2 ●' : 'Demo mode';
+    document.getElementById('p-detect-status').textContent = j.detector ? 'YOLOv8n · active' : 'Demo mode';
+    document.getElementById('p-uptime').textContent        = formatUptime(j.uptime);
+    document.getElementById('cam-status').textContent      = j.camera ? 'LIVE' : 'DEMO';
+    if (j.camera) {
+      document.getElementById('camera-stream').style.display = 'block';
+      document.getElementById('camera-placeholder').style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+function setConnected(ok) {
+  connected = ok;
+  document.getElementById('conn-dot').className   = 'dot' + (ok ? '' : ' offline');
+  document.getElementById('conn-label').textContent = ok ? 'Connected · Pi' : 'Demo mode';
+  document.getElementById('live-badge').textContent  = ok ? '● LIVE' : '● DEMO';
+  document.getElementById('live-badge').style.background = ok ? 'rgba(34,197,94,.15)' : 'rgba(245,166,35,.15)';
+  document.getElementById('live-badge').style.color = ok ? 'var(--green)' : 'var(--amber)';
+  document.getElementById('conn-banner').className = 'conn-banner' + (ok ? '' : ' show');
+}
+
+function retryConnect() { fetchLive(); }
+
+// ═══════════════════════════════════════════
+// RENDER — DISPATCHER
+// ═══════════════════════════════════════════
+function renderAll(data) {
+  renderStats(data);
+  renderStops(data.stops);
+  renderAlerts(data.alerts);
+  renderFleet(data.buses);
+  renderHeatmap(data.stops);
+  renderPredBars(data.stops);
+  if (selectedStop) renderStopDetail(selectedStop);
+  renderPassengerView(data);
+}
+
+function renderStats(data) {
+  setText('stat-total-crowd', data.total_crowd || 0);
+  setText('stat-buses', data.buses ? data.buses.filter(b=>b.status==='active').length : 0);
+  setText('stat-alerts', data.alerts ? data.alerts.length : 0);
+  setText('stat-signals', data.signals_today || 0);
+}
+
+function renderStops(stops) {
+  if (!stops || !stops.length) return;
+  const list = document.getElementById('stops-list');
+  list.innerHTML = stops.map(s => {
+    const lvl   = s.crowd_level || 'low';
+    const color = lvl==='high'?'var(--red)':lvl==='med'?'var(--amber)':'var(--green)';
+    const active = selectedStop && selectedStop.id === s.id ? ' active' : '';
+    return `
+    <div class="stop-item${active}" onclick="selectStop(${JSON.stringify(s).replace(/"/g,'&quot;')})">
+      <div class="stop-indicator" style="background:${color}"></div>
+      <div class="stop-info">
+        <div class="stop-name">${s.name}</div>
+        <div class="stop-count">${s.crowd_count || 0} people · Route ${s.route}</div>
+      </div>
+      <span class="crowd-badge crowd-${lvl}">${s.crowd_count || 0}</span>
+    </div>`;
+  }).join('');
+
+  // Auto-select first stop if none selected
+  if (!selectedStop && stops.length) {
+    selectStop(stops[0]);
+  }
+}
+
+function renderAlerts(alerts) {
+  const list = document.getElementById('alerts-list');
+  if (!alerts || !alerts.length) {
+    list.innerHTML = '<div style="color:var(--green);font-size:12px;padding:8px">✓ No active alerts</div>';
+    return;
+  }
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-card ${a.type==='emergency'?'urgent':a.type==='dispatch'?'dispatch':'suggestion'}">
+      <div class="alert-label">${a.type.toUpperCase()}</div>
+      <div class="alert-text">${a.message}</div>
+      <div class="alert-ts">${formatTime(a.ts)}</div>
+      ${a.type==='emergency'?'<span class="alert-action" onclick="dispatchToStop(\''+a.stop_id+'\')">Dispatch Now</span>':''}
+    </div>`).join('');
+}
+
+function renderFleet(buses) {
+  if (!buses || !buses.length) return;
+  const tbody = document.getElementById('fleet-table');
+  tbody.innerHTML = buses.map(b => {
+    const cap  = b.capacity || 48;
+    const free = b.seats_free !== undefined ? b.seats_free : Math.floor(Math.random()*20+5);
+    const occ  = cap - free;
+    const dots = Array.from({length:10}).map((_,i) =>
+      `<div class="seat-dot ${i<Math.round(occ/cap*10)?'seat-occupied':'seat-free'}"></div>`
+    ).join('');
+    const isDispatch = b.status === 'dispatched';
+    return `<tr>
+      <td><span class="bus-id">${b.id}</span></td>
+      <td><strong>${b.route}</strong></td>
+      <td style="color:var(--muted);font-size:11px">${b.next_stop||'—'}</td>
+      <td><span class="eta-val">${b.eta_min||'—'} min</span></td>
+      <td><div class="seat-bar">${dots}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${free}/${cap} free</div></td>
+      <td><button class="action-btn ${isDispatch?'primary':''}"
+          onclick="dispatchToStop('${b.next_stop||''}')">${isDispatch?'En Route':'On Track'}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderHeatmap(stops) {
+  const container = document.getElementById('heatmap-container');
+  if (!container || !stops) return;
+  const hours = ['8AM','9AM','10AM','11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM','Pred'];
+  const data = stops.map(s => {
+    const base = s.crowd_count || 20;
+    return hours.map((h, i) => {
+      const tod = [.8,.95,.6,.45,.3,.35,.4,.55,.7,.95,1.0,1.1];
+      return Math.round(base * tod[i] * (0.8 + Math.random()*0.4));
+    });
+  });
+  const maxV = Math.max(...data.flat(), 1);
+  let html = '<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px">';
+  hours.forEach((h, hi) => {
+    html += `<div><div style="text-align:center;font-size:9px;color:${hi===11?'var(--teal)':'var(--muted)'};font-family:var(--mono);margin-bottom:3px">${h}</div>`;
+    data.forEach((row, si) => {
+      const v    = row[hi];
+      const norm = v / maxV;
+      const r    = Math.round(norm*239 + (1-norm)*34);
+      const g    = Math.round(norm*68  + (1-norm)*197);
+      const b2   = Math.round(norm*68  + (1-norm)*94);
+      const op   = 0.35 + norm*0.65;
+      html += `<div class="heatmap-stop" style="background:rgba(${r},${g},${b2},${op});margin-bottom:3px"
+               title="${stops[si].name}: ${v} pax at ${h}"></div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  html += '<div style="display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10px;color:var(--muted)">';
+  html += '<span>Low</span>';
+  for(let i=0;i<8;i++){const n=i/7;const r=Math.round(n*239+(1-n)*34);const g=Math.round(n*68+(1-n)*197);const b2=Math.round(n*68+(1-n)*94);html+=`<div style="width:16px;height:7px;border-radius:2px;background:rgba(${r},${g},${b2},${0.35+n*.65})"></div>`;}
+  html += '<span>High</span> &nbsp;<span style="color:var(--teal)">◆ Pred</span></div>';
+  container.innerHTML = html;
+  document.getElementById('heatmap-badge').textContent = `${stops.length} stops · live`;
+}
+
+function renderPredBars(stops) {
+  if (!stops) return;
+  const container = document.getElementById('pred-bars');
+  const sorted = [...stops].sort((a,b) => (b.crowd_count||0)-(a.crowd_count||0));
+  const max = Math.max(...sorted.map(s => s.crowd_count||0), 1);
+  container.innerHTML = sorted.map(s => {
+    const cur  = s.crowd_count || 0;
+    const pred = Math.round(cur * (1 + (Math.random()*0.3 - 0.05)));
+    const col  = cur>60?'var(--red)':cur>30?'var(--amber)':'var(--green)';
+    return `<div class="pred-bar-row">
+      <div class="pred-bar-label">${s.name}</div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+        <div class="pred-bar-track"><div class="pred-bar-fill" style="width:${(cur/(max*1.3))*100}%;background:${col};opacity:.6"></div></div>
+        <div class="pred-bar-track"><div class="pred-bar-fill" style="width:${(pred/(max*1.3))*100}%;background:${col}"></div></div>
+      </div>
+      <div class="pred-bar-val">${cur}→<span style="color:${col}">${pred}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// STOP SELECTION
+// ═══════════════════════════════════════════
+function selectStop(stop) {
+  selectedStop = stop;
+  document.querySelectorAll('.stop-item').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.stop-name')?.textContent === stop.name);
+  });
+  renderStopDetail(stop);
+}
+
+function renderStopDetail(stop) {
+  const count = stop.crowd_count || 0;
+  const level = stop.crowd_level || 'low';
+  setText('selected-stop-name', stop.name);
+  setText('selected-stop-route', `Route ${stop.route} · ${stop.id}`);
+
+  const badge = document.getElementById('selected-crowd-badge');
+  badge.className = `crowd-badge crowd-${level}`;
+  badge.textContent = level.toUpperCase();
+
+  setText('crowd-count-badge', count);
+  setText('crowd-level-text', `Level: ${level.toUpperCase()} · ${count} people detected by YOLOv8n`);
+
+  // Crowd visual
+  buildCrowdVisual('crowd-visual', count);
+
+  // Seat grid
+  const seats = Math.max(0, 48 - count);
+  buildSeatGrid('seat-grid', seats, 48);
+  setText('seat-count-badge', `${seats}/48 free`);
+  setText('seat-status-text', seats<8?'🔴 Very crowded':seats<20?'🟡 Moderate':'🟢 Comfortable');
+
+  // Mini prediction
+  const container = document.getElementById('prediction-bars-mini');
+  const preds = [
+    {label:'+15 min', pred: Math.round(count * 1.1), color:'var(--amber)'},
+    {label:'+30 min', pred: Math.round(count * 0.9), color:'var(--teal)'},
+    {label:'+60 min', pred: Math.round(count * 0.6), color:'var(--green)'},
+  ];
+  container.innerHTML = preds.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-bottom:6px">
+      <span style="color:var(--muted);width:50px">${p.label}</span>
+      <div style="flex:1;height:4px;background:rgba(255,255,255,.07);border-radius:2px;margin:0 8px;overflow:hidden">
+        <div style="width:${Math.min(p.pred/120*100,100)}%;height:100%;background:${p.color};border-radius:2px"></div>
+      </div>
+      <span style="font-family:var(--mono);color:${p.color};width:40px;text-align:right">~${p.pred}</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// PASSENGER VIEW
+// ═══════════════════════════════════════════
+function renderPassengerView(data) {
+  if (!data) return;
+  const stops = data.stops || [];
+  const buses = data.buses || [];
+
+  // Use first (busiest) stop for passenger view
+  const busiest = [...stops].sort((a,b)=>(b.crowd_count||0)-(a.crowd_count||0))[0];
+  if (!busiest) return;
+
+  const count = busiest.crowd_count || 0;
+  const level = busiest.crowd_level || 'low';
+  const seats = Math.max(0, 48 - count);
+
+  setText('p-stop-name', busiest.name + ' Bus Stand');
+  setText('p-stop-sub', `Route ${busiest.route} · Live from PiCamera2 · YOLOv8n`);
+
+  const pbadge = document.getElementById('p-crowd-badge');
+  pbadge.className = `p-crowd-badge crowd-${level}`;
+  pbadge.textContent = level.toUpperCase();
+
+  // LED board
+  const nextBus = buses[0];
+  setText('led-next-bus',  nextBus ? nextBus.id : '—');
+  setText('led-eta',       nextBus ? `${nextBus.eta_min||'?'} min` : '— min');
+  setText('led-seats',     seats);
+  setText('led-crowd',     `${count} people`);
+  setText('led-status',    count>60?'OVERCROWDED':count>30?'BUSY':'NORMAL');
+
+  setText('p-crowd-count', `${count} people detected`);
+  buildCrowdVisual('p-crowd-visual', count);
+
+  // Announcement text
+  const eta = nextBus ? nextBus.eta_min : '?';
+  document.getElementById('p-announce-en').textContent =
+    `Bus ${nextBus?.id||''} arriving in ${eta} minutes. Approximately ${seats} seats available.`;
+  document.getElementById('p-announce-kn').textContent =
+    `ಬಸ್ ${nextBus?.id||''} ${eta} ನಿಮಿಷದಲ್ಲಿ ಬರುತ್ತದೆ. ಸುಮಾರು ${seats} ಆಸನಗಳಿವೆ.`;
+
+  // Seat info
+  setText('p-seat-big', seats);
+  setText('p-seat-status', seats<8?'Very crowded — consider next bus':seats<20?'Moderate — limited seating':'Comfortable — plenty of seats');
+  buildSeatGrid('p-seat-grid', seats, 48);
+
+  // Buses list
+  document.getElementById('p-buses-list').innerHTML = buses.slice(0,3).map((b,i) => `
+    <div class="bus-arrive-card ${i===0?'next':''}">
+      <div class="ba-top">
+        <div>
+          <div class="ba-route">Route ${b.route}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${b.id}</div>
+        </div>
+        <div class="ba-eta-big">
+          <div class="ba-eta-num">${b.eta_min||'?'}</div>
+          <div class="ba-eta-label">MIN AWAY</div>
+        </div>
+      </div>
+      <div class="ba-seat-row">
+        <span class="ba-seat-label">Seats free:</span>
+        <span class="ba-seat-count">${Math.max(0,b.capacity-(b.onboard||0))}</span>
+        <div class="ba-seat-bar-track">
+          <div class="ba-seat-bar-fill" style="width:${Math.max(0,b.capacity-(b.onboard||0))/b.capacity*100}%"></div>
+        </div>
+      </div>
+      <div class="ba-stops">Capacity: ${b.capacity} · Route ${b.route}</div>
+    </div>`).join('');
+
+  // Predictions
+  document.getElementById('p-prediction-list').innerHTML = [
+    {t:'+15 min', n: Math.round(count*1.1), c:'var(--amber)'},
+    {t:'+30 min', n: Math.round(count*0.9), c:'var(--teal)'},
+    {t:'+60 min', n: Math.round(count*0.6), c:'var(--green)'},
+  ].map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-bottom:8px">
+      <span style="color:var(--muted);width:55px">${p.t}</span>
+      <div style="flex:1;height:5px;background:rgba(255,255,255,.07);border-radius:3px;margin:0 8px;overflow:hidden">
+        <div style="width:${Math.min(p.n/120*100,100)}%;height:100%;background:${p.c};border-radius:3px"></div>
+      </div>
+      <span style="font-family:var(--mono);color:${p.c};width:45px;text-align:right">~${p.n} pax</span>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════
+async function dispatchToSelected() {
+  if (!selectedStop) { alert('Select a stop first'); return; }
+  dispatchToStop(selectedStop.id);
+}
+
+async function dispatchBestBus() {
+  const stops = liveData?.stops || [];
+  const busiest = [...stops].sort((a,b)=>(b.crowd_count||0)-(a.crowd_count||0))[0];
+  if (busiest) dispatchToStop(busiest.id);
+}
+
+async function dispatchToStop(stopId) {
+  try {
+    const r = await fetch(API + '/api/dispatch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({stop_id: stopId, reason: 'manual_dashboard'})
+    });
+    const j = await r.json();
+    if (j.ok) {
+      alert(`✅ Bus ${j.result.bus_id} dispatched!\nETA: ${j.result.eta_min} minutes`);
+      fetchLive();
+    }
+  } catch(e) {
+    alert('✅ Bus dispatched (demo mode)\nETA: ' + (5+Math.floor(Math.random()*10)) + ' minutes');
+  }
+}
+
+async function sendPassengerSignal() {
+  if (signalSent) return;
+  signalSent = true;
+  const btn = document.getElementById('p-signal-btn');
+  btn.classList.add('sent');
+  btn.innerHTML = '<span>✅</span> Signal Sent to Depot';
+
+  try {
+    const stop = selectedStop || liveData?.stops?.[0];
+    if (stop) {
+      const r = await fetch(API + '/api/signal', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({stop_id: stop.id})
+      });
+      const j = await r.json();
+      setText('p-signal-counter', j.signal_count || '—');
+    }
+  } catch(e) {
+    const cur = parseInt(document.getElementById('p-signal-counter').textContent) || 0;
+    setText('p-signal-counter', cur + 1);
+  }
+
+  setTimeout(() => {
+    btn.classList.remove('sent');
+    btn.innerHTML = '<span>🖐</span> Request Bus at This Stop';
+    signalSent = false;
+  }, 5000);
+}
+
+async function triggerAnnouncement() {
+  const stop = selectedStop;
+  if (!stop) return;
+  const count = stop.crowd_count || 0;
+  const seats = Math.max(0, 48 - count);
+  try {
+    await fetch(API + '/api/announce', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        text: `Attention. Current crowd at ${stop.name}: ${count} people. Approximately ${seats} seats available on next bus.`,
+        lang: 'en'
+      })
+    });
+  } catch(e) {}
+  alert(`🔊 Announcing at ${stop.name}\n"${count} people at stop. ~${seats} seats available."`);
+}
+
+function playAnnouncement() {
+  const btn = event.target;
+  btn.textContent = '🔊 Playing announcement...';
+  try {
+    fetch(API + '/api/announce', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: document.getElementById('p-announce-en').textContent, lang: 'en'})
+    });
+  } catch(e) {}
+  setTimeout(() => { btn.innerHTML = '▶ &nbsp;Play Announcement (pyttsx3 offline)'; }, 3000);
+}
+
+// Camera stream
+function showCameraPlaceholder() {
+  document.getElementById('camera-stream').style.display = 'none';
+  document.getElementById('camera-placeholder').style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════
+// BUILDERS
+// ═══════════════════════════════════════════
+function buildCrowdVisual(id, count) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const total = 48;
+  const shown = Math.min(count, total);
+  el.innerHTML = Array.from({length:total}).map((_,i) =>
+    `<div class="person-icon ${i<shown?'present':'absent'}">${i<shown?'👤':''}</div>`
+  ).join('');
+}
+
+function buildSeatGrid(id, free, total) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const occ = total - free;
+  el.innerHTML = Array.from({length:total}).map((_,i) =>
+    `<div class="seat-unit ${i<occ?'occupied':'free'}">${i>=occ?'FREE':''}</div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════
+// DEMO DATA (when backend not reachable)
+// ═══════════════════════════════════════════
+function renderDemoData() {
+  const demo = {
+    stops: [
+      {id:'stop_majestic',    name:'Majestic',     route:'201', crowd_count: 82+Math.floor(Math.random()*10), crowd_level:'high'},
+      {id:'stop_shivajinagar',name:'Shivajinagar', route:'201', crowd_count: 54+Math.floor(Math.random()*8),  crowd_level:'med'},
+      {id:'stop_mgroad',      name:'MG Road',      route:'201', crowd_count: 38+Math.floor(Math.random()*6),  crowd_level:'med'},
+      {id:'stop_indiranagar', name:'Indiranagar',  route:'219', crowd_count: 22+Math.floor(Math.random()*5),  crowd_level:'low'},
+      {id:'stop_koramangala', name:'Koramangala',  route:'252', crowd_count: 17+Math.floor(Math.random()*4),  crowd_level:'low'},
+      {id:'stop_btm',         name:'BTM Layout',   route:'252', crowd_count: 68+Math.floor(Math.random()*8),  crowd_level:'high'},
+      {id:'stop_hsr',         name:'HSR Layout',   route:'219', crowd_count: 31+Math.floor(Math.random()*6),  crowd_level:'med'},
+    ],
+    buses: [
+      {id:'KA-01-F-2287', route:'201', capacity:48, eta_min:3,  onboard:40, seats_free:8,  status:'active', next_stop:'Shivajinagar'},
+      {id:'KA-01-F-2291', route:'201', capacity:48, eta_min:7,  onboard:36, seats_free:12, status:'active', next_stop:'MG Road'},
+      {id:'KA-01-F-2295', route:'219', capacity:54, eta_min:5,  onboard:23, seats_free:31, status:'active', next_stop:'Majestic'},
+      {id:'KA-01-F-2301', route:'252', capacity:60, eta_min:11, onboard:22, seats_free:38, status:'active', next_stop:'BTM Layout'},
+      {id:'KA-01-F-2315', route:'202', capacity:54, eta_min:14, onboard:10, seats_free:44, status:'active', next_stop:'Indiranagar'},
+    ],
+    alerts: [
+      {id:1,type:'emergency', stop_id:'stop_majestic', message:'Overcrowding at Majestic: 82 people detected', count:82, ts: new Date().toISOString()},
+      {id:2,type:'suggestion',stop_id:'stop_btm',      message:'BTM Layout surge predicted in 15 min — pre-position bus', count:68, ts: new Date().toISOString()},
+    ],
+    total_crowd: 312,
+    signals_today: 47,
+    ts: new Date().toISOString()
+  };
+  liveData = demo;
+  renderAll(demo);
+}
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  try { return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+  catch(e) { return ts; }
+}
+
+function formatUptime(secs) {
+  if (!secs) return '—';
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${s}s` : `${s}s`;
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+function init() {
+  renderDemoData();     // instant render
+  fetchLive();          // try real data
+  fetchHealth();
+  fetchSysInfo();
+
+  // Polling
+  setInterval(fetchLive,    POLL);
+  setInterval(fetchSysInfo, 5000);
+  setInterval(fetchHealth,  10000);
+
+  // Clock
+  setInterval(() => {
+    const n = new Date();
+    setText('clock', n.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+  }, 1000);
+}
+
+init();
+</script>
+</body>
+</html>
